@@ -26,7 +26,7 @@ i.e., Android 10.0 and higher, are not supported.
     git clone https://faui1-gitlab.cs.fau.de/gaston.pugliese/avdecrypt.git
     ```
 
-    _Alternative:_ Download as [ZIP-File](https://faui1-gitlab.cs.fau.de/gaston.pugliese/avdecrypt/-/archive/master/avdecrypt-master.zip).
+    _Alternative:_ Download as [ZIP file](https://faui1-gitlab.cs.fau.de/gaston.pugliese/avdecrypt/-/archive/master/avdecrypt-master.zip).
 
 * Ensure that the Android SDK directory `emulator/` is in `PATH`, because of `qemu-img`.
 
