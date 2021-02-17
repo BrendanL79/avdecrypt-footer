@@ -21,16 +21,23 @@ i.e., Android 10.0 and higher, are not supported.
 
 ## Installation
 
-Ensure that the Android SDK directory `emulator/` is in `PATH`, because of `qemu-img`.
+* Clone or download the repository:
+    ```
+    git clone ssh://git@faui1-gitlab.cs.fau.de:2222/gaston.pugliese/avdecrypt.git
+    ```
 
-Run the appropriate installation script for your operating system:
-* macOS: `install-macos.sh` (tested on 10.14.6, 10.15.7)
-* Ubuntu: `install-ubuntu.sh` (tested on 19.10)
+    _Alternative:_ Download as [ZIP-File](https://faui1-gitlab.cs.fau.de/gaston.pugliese/avdecrypt/-/archive/master/avdecrypt-master.zip).
 
-Afterwards, install the Python requirements:
-```
-pip install -r requirements.txt
-```
+* Ensure that the Android SDK directory `emulator/` is in `PATH`, because of `qemu-img`.
+
+* Run the appropriate installation script for your operating system:
+    * macOS: `install-macos.sh` (tested on 10.14.6, 10.15.7)
+    * Ubuntu: `install-ubuntu.sh` (tested on 19.10)
+
+* Afterwards, install the Python requirements:
+    ```
+    pip install -r requirements.txt
+    ```
 
 
 ## Getting started
@@ -41,7 +48,7 @@ After starting the Android Virtual Device (AVD),
 make sure that it does not use file-based encryption (FBE), 
 but full-disk encryption (FDE).
 
-To verify enabled FDE, run the following command:
+To verify enabled FDE, run the following command on your host:
 
 ```
 adb shell getprop ro.crypto.type \
@@ -60,9 +67,9 @@ After verifying that FDE is enabled, simply run:
 python3 avdecrypt.py 
     -a <PATH_OF_AVD_DIRECTORY> 
     -s <SNAPSHOT_NAME>
-    -p <PASSWORD> (Default password: default_password)
+    -p <PASSWORD> (Default password: default_password; optional)
     -o <PATH_OF_OUTPUT_DIRECTORY>
-    -v (verbose)
+    -v (verbose; optional)
 ```
 
 ## Credits
@@ -75,5 +82,5 @@ This repository only makes use of a small portion of the tools and code
 provided by the `android-fde` repository.  
 
 This repository was inspired by an existing wrapper script 
-for `android-fde` written by Davide Bove in Python 2. 
-Kudos to Tobias Groß for discussing Android's full-disk encryption.
+for `android-fde` written by [Davide Bove](https://www.cs1.tf.fau.de/person/davide-bove/) in Python 2. 
+Kudos to [Tobias Groß](https://www.cs1.tf.fau.de/person/tobias-gros/) for discussing Android's full-disk encryption.
