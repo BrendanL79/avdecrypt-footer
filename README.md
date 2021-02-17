@@ -23,7 +23,7 @@ i.e., Android 10.0 and higher, are not supported.
 
 * Clone or download the repository:
     ```
-    git clone ssh://git@faui1-gitlab.cs.fau.de:2222/gaston.pugliese/avdecrypt.git
+    git clone https://faui1-gitlab.cs.fau.de/gaston.pugliese/avdecrypt.git
     ```
 
     _Alternative:_ Download as [ZIP-File](https://faui1-gitlab.cs.fau.de/gaston.pugliese/avdecrypt/-/archive/master/avdecrypt-master.zip).
