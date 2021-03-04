@@ -1,7 +1,7 @@
 # AVDecrypt on Windows 10
 
 ## Requirements
-- Configure the <a href="Windows-Subsystem für Linux" target="_blank" rel="noopener noreferrer nofollow">_Windows Subsystem for Linux (WSL)_</a> and install the <a href="https://www.microsoft.com/de-de/p/ubuntu/9nblggh4msv6" target="_blank" rel="noopener noreferrer nofollow">_Ubuntu_</a> app on your Windows 10 host system
+- Configure the <a href="https://docs.microsoft.com/de-de/windows/wsl/install-win10" target="_blank" rel="noopener noreferrer nofollow">_Windows Subsystem for Linux (WSL)_</a> and install the <a href="https://www.microsoft.com/de-de/p/ubuntu/9nblggh4msv6" target="_blank" rel="noopener noreferrer nofollow">_Ubuntu_</a> app on your Windows 10 host system
 
 ## Ubuntu Terminal
 
