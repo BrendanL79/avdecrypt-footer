@@ -30,6 +30,7 @@ i.e., Android 10.0 and higher, are not supported.
 * Run the appropriate installation script for your operating system:
     * macOS: `install-macos.sh` (tested on 10.14.6, 10.15.7)
     * Ubuntu: `install-ubuntu.sh` (tested on 19.10)
+    * Windows: see [`INSTALL_WIN.md`](INSTALL_WIN.md)
 * Afterwards, install the Python requirements:
     ```
     pip install -r requirements.txt
