@@ -6,9 +6,9 @@ brew install sleuthkit
 LDFLAGS="-L$(brew --prefix openssl)/lib" \
 CFLAGS="-I$(brew --prefix openssl)/include" \
 SWIG_FEATURES="-I$(brew --prefix openssl)/include" \
-pip install m2crypto
+pip install m2crypto==0.35.2
 
 LDFLAGS="-L$(brew --prefix openssl)/lib" \
 CFLAGS="-I$(brew --prefix openssl)/include" \
 SWIG_FEATURES="-I$(brew --prefix openssl)/include" \
-pip install scrypt
+pip install scrypt==0.8.13
