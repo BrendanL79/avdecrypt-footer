@@ -154,8 +154,12 @@ def get_decrypted_key(encrypted_key: bytes, salt: bytes, password: str, header: 
     # For scrypt case, use py-script from https://bitbucket.org/mhallin/py-scrypt/src
 
     dk_len = key_size + IV_LEN_BYTES
+    dk_type = header[0xbc]
 
-    if header[0xbc] == 2:  # if the header specify a dkType == 2, the partition uses scrypt
+    if dk_type == 5:
+        print("[-] This partition uses scrypt + keymaster; can only be decrypted on original hardware :-(")
+        exit(-1)
+    elif dk_type == 2:  # if the header specify a dkType == 2, the partition uses scrypt
         if verbose:
             print('[+] This partition uses scrypt')
         factors = (fact for fact in header[0xbd:0xc0])
