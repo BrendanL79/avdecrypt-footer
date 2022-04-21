@@ -19,6 +19,7 @@ import os
 
 import scrypt
 import struct
+import tempfile
 import typing
 import hashlib
 import pathlib
@@ -28,8 +29,9 @@ import subprocess
 from M2Crypto import EVP
 
 
-FILE_DATA_PARTITION = 'userdata-qemu.img.qcow2'
-FILE_ENCRYPTION_KEY_PARTITION = 'encryptionkey.img.qcow2'
+DEFAULT_FILE_DATA_PARTITION = 'userdata-qemu.img.qcow2'
+DEFAULT_FILE_ENCRYPTION_KEY_PARTITION = 'encryptionkey.img.qcow2'
+TEMP_FOOTER_FILE = None
 
 HEADER_FORMAT = '=LHHLLLLLLL64s'
 IV_LEN_BYTES = 16
@@ -45,7 +47,12 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Decrypting Android\'s full-disk encryption (FDE)')
 
     parser.add_argument('-a', '--avd', help='Path to Android Virtual Device directory', required=True)
-    parser.add_argument('-s', '--snapshot', help='Snapshot name', required=True)
+    parser.add_argument('-s', '--snapshot', help='Snapshot name')
+    parser.add_argument('-d', '--data_partition', help="Data partition file. Default is " + DEFAULT_FILE_DATA_PARTITION,
+                        default=DEFAULT_FILE_DATA_PARTITION)
+    parser.add_argument('-k', '--key_partition', help="Key partition file. Default is " + DEFAULT_FILE_ENCRYPTION_KEY_PARTITION,
+                        default=DEFAULT_FILE_ENCRYPTION_KEY_PARTITION)
+    parser.add_argument('-f', '--key_footer', help="Key is in crypto footer of data partition", action='store_true')
     parser.add_argument('-p', '--password', help='Android screen lock password. Default is "default_password"',
                         default='default_password')
     parser.add_argument('-o', '--outdir', help='Path to save the decrypted partition to', required=True)
@@ -54,15 +61,17 @@ def parse_arguments() -> argparse.Namespace:
 
     # parse command-line arguments
     args: argparse.Namespace = parser.parse_args()
-
     args.avd = pathlib.Path(args.avd)
     args.outdir = pathlib.Path(args.outdir)
 
-    args.outname = f'{args.snapshot}'
-    args.header_file = args.avd.joinpath(FILE_ENCRYPTION_KEY_PARTITION)
-    args.encrypted_partition = args.avd.joinpath(FILE_DATA_PARTITION)
+    args.outname = f'{args.snapshot}' if args.snapshot else "userdata-decrypted"
+    args.header_file = "" if args.key_footer else args.avd.joinpath(args.key_partition)
+    args.encrypted_partition = args.avd.joinpath(args.data_partition)
 
-    assert os.path.isfile(args.header_file), f"Header file '{args.header_file}' not found."
+    if(args.header_file):
+        assert os.path.isfile(args.header_file), f"Header file '{args.header_file}' not found."
+    else:
+        args.header_file = "(data partition footer)"
     assert os.path.isfile(args.encrypted_partition), f"Encrypted partition '{args.encrypted_partition}' not found."
 
     # print command-line arguments
@@ -70,7 +79,10 @@ def parse_arguments() -> argparse.Namespace:
         print('\n' + '=' * 72 + '\nDecrypting Android\'s Full-Disk Encryption (FDE)\n'
                                 'for Android Virtual Devices (AVD)\n' + '=' * 72 + '\n')
         print(f'    AVD directory: {args.avd}')
-        print(f'         Snapshot: {args.snapshot}')
+        print(f'   Data partition: {args.encrypted_partition}')
+        print(f'    Key partition: {args.header_file}')
+        if(args.snapshot):
+            print(f'         Snapshot: {args.snapshot}')
         print(f'         Password: {args.password}')
         print(f' Output directory: {args.outdir}')
         print(f'Chunk size (hash): {args.chunk_size:,} (bytes)')
@@ -291,8 +303,10 @@ def get_file_info(path: pathlib.Path, chunk_size: int):
 
 def get_encrypted_key_and_data_partitions(args: argparse.Namespace) -> tuple:
     if args.verbose:
-        print(f'STEP 1: Get encrypted RAW images of (i) `{FILE_ENCRYPTION_KEY_PARTITION}`\n'
-              f'        and (ii) `{FILE_DATA_PARTITION}` (at snapshot state `{args.snapshot}`)\n'
+        i_substr = "(crypto-footer of data partition)" if args.key_footer else FILE_ENCRYPTION_KEY_PARTITION
+        snapshot_substr = f' (at snapshot state `{args.snapshot}`)' if args.snapshot else ""
+        print(f'STEP 1: Get encrypted RAW images of (i) `{i_substr}`\n'
+              f'        and (ii) `{FILE_DATA_PARTITION}``{snapshot_substr}`\n'
               f'        from AVD directory: `{args.avd}`\n')
 
     path_data = get_encrypted_raw_image(img_dir=args.avd, img_filename=args.encrypted_partition,
@@ -336,10 +350,24 @@ def decrypt_data_partition(path_in: pathlib.Path, decrypted_key: bytes, args: ar
     decrypt(encrypted_partition=path_in, sector_start=sector_start, decrypted_key=decrypted_key, outfile=path_out)
     get_file_info(path=path_out, chunk_size=args.chunk_size)
 
+def extract_footer():
+    print("Extracting footer...\n")
+    CRYPTO_FOOTER_SIZE=16384
+    TEMP_FOOTER_FILE = tempfile.TemporaryFile()
+    with open(args.encrypted_partition.as_posix(), 'rb') as f:
+        f.seek(-1 * CRYPTO_FOOTER_SIZE, os.SEEK_END)
+        chunk = f.read(CRYPTO_FOOTER_SIZE)
+        print(chunk.hex()[:16])
+        TEMP_FOOTER_FILE.write(chunk)
+
 
 if __name__ == '__main__':
     # parse command-line arguments
     args = parse_arguments()
+
+    if args.key_footer:
+        extract_footer()
+        exit(-1)
 
     # get partitions of encrypted key and data partitions as raw files
     path_key, path_data = get_encrypted_key_and_data_partitions(args=args)
