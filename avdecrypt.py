@@ -31,7 +31,6 @@ from M2Crypto import EVP
 
 DEFAULT_FILE_DATA_PARTITION = 'userdata-qemu.img.qcow2'
 DEFAULT_FILE_ENCRYPTION_KEY_PARTITION = 'encryptionkey.img.qcow2'
-TEMP_FOOTER_FILE = None
 
 HEADER_FORMAT = '=LHHLLLLLLL64s'
 IV_LEN_BYTES = 16
@@ -64,9 +63,12 @@ def parse_arguments() -> argparse.Namespace:
     args.avd = pathlib.Path(args.avd)
     args.outdir = pathlib.Path(args.outdir)
 
+    if not args.outdir.exists():
+        os.makedirs(args.outdir.as_posix())
+
     args.outname = f'{args.snapshot}' if args.snapshot else "userdata-decrypted"
-    args.header_file = "" if args.key_footer else args.avd.joinpath(args.key_partition)
-    args.encrypted_partition = args.avd.joinpath(args.data_partition)
+    args.header_file = "" if args.key_footer else args.avd.joinpath(args.key_partition).as_posix()
+    args.encrypted_partition = args.avd.joinpath(args.data_partition).as_posix()
 
     if(args.header_file):
         assert os.path.isfile(args.header_file), f"Header file '{args.header_file}' not found."
@@ -93,13 +95,20 @@ def parse_arguments() -> argparse.Namespace:
 
 
 def parse_encryption_key_from_partition(header_file: pathlib.Path, verbose: bool) -> tuple:
-    # check header file is bigger than 0x100
-    file_size = os.path.getsize(header_file.as_posix())
-    assert (file_size >= 0x100)
+    
+    if(header_file):
+        # check header file is bigger than 0x100
+        file_size = os.path.getsize(header_file.as_posix())
+        assert (file_size >= 0x100)
 
-    # read header file
-    with open(header_file.as_posix(), 'rb') as f:
-        header = f.read()
+        # read header file
+        with open(header_file.as_posix(), 'rb') as f:
+            header = f.read()
+    elif(args.key_footer):
+        header = extract_footer()
+    else:
+        print("ERROR finding encryption data")
+        exit(-1)
 
     # unpack header
     ftr_magic, major_version, minor_version, ftr_size, flags, key_size, spare1, fs_size1, fs_size2, failed_decrypt, \
@@ -196,6 +205,10 @@ def decrypt_data(decrypted_key: bytes, essiv: bytes, data: bytes) -> typing.Unio
     dec_data = cipher.update(data)
     dec_data = dec_data + cipher.final()
 
+    print("DECRYPTED DATA:")
+    print(dec_data.hex()[0:16])
+    exit(0)
+
     return dec_data
 
 
@@ -206,7 +219,15 @@ def decrypt(encrypted_partition: pathlib.Path, sector_start: int, decrypted_key:
     nb_sectors = file_size // SECTOR_SIZE
 
     fd = open(encrypted_partition.as_posix(), 'rb')
-    outfd = open(outfile.as_posix(), 'wb')
+
+    if(outfile.exists()):
+        outmode = 'wb'
+    else:
+        outmode = 'w+b'
+
+    print("Opening ",outfile.as_posix()," in mode: ",outmode)
+
+    outfd = open(outfile.as_posix(), outmode)
 
     key_size = len(decrypted_key)
     assert (key_size == 16 or key_size == 32)  # other cases should be double checked
@@ -249,6 +270,10 @@ def get_encrypted_raw_image(img_dir: pathlib.Path, img_filename: str,
                             snapshot: typing.Union[str, None], verbose: bool) -> pathlib.Path:
     imgpath = img_dir.joinpath(img_filename)
     outpath = out_dir.joinpath(f'{out_filename}.raw.enc')
+
+    if(not (".qcow2" in img_filename[-5:])):
+        # assume already raw, return input
+        return imgpath
 
     # convert disk image to raw
     cmd = ['qemu-img', 'convert', '-f', 'qcow2', '-O', 'raw']
@@ -296,9 +321,9 @@ def get_file_info(path: pathlib.Path, chunk_size: int):
     size = os.path.getsize(path.as_posix())
     print(f'  PATH: {path}')
     print(f'  SIZE: {size / 1e6:,.2f} MB ({size:,} B)')
-    print(f'   MD5: {get_file_md5(path=path, chunk_size=chunk_size)}')
-    print(f'SHA256: {get_file_sha256(path=path, chunk_size=chunk_size)}')
-    print(f'FSSTAT: {get_file_system_details(path=path)}\n')
+    #print(f'   MD5: {get_file_md5(path=path, chunk_size=chunk_size)}')
+    #print(f'SHA256: {get_file_sha256(path=path, chunk_size=chunk_size)}')
+    #print(f'FSSTAT: {get_file_system_details(path=path)}\n')
 
 
 def get_encrypted_key_and_data_partitions(args: argparse.Namespace) -> tuple:
@@ -306,7 +331,7 @@ def get_encrypted_key_and_data_partitions(args: argparse.Namespace) -> tuple:
         i_substr = "(crypto-footer of data partition)" if args.key_footer else FILE_ENCRYPTION_KEY_PARTITION
         snapshot_substr = f' (at snapshot state `{args.snapshot}`)' if args.snapshot else ""
         print(f'STEP 1: Get encrypted RAW images of (i) `{i_substr}`\n'
-              f'        and (ii) `{FILE_DATA_PARTITION}``{snapshot_substr}`\n'
+              f'        and (ii) `{args.encrypted_partition}` {snapshot_substr}\n'
               f'        from AVD directory: `{args.avd}`\n')
 
     path_data = get_encrypted_raw_image(img_dir=args.avd, img_filename=args.encrypted_partition,
@@ -314,6 +339,10 @@ def get_encrypted_key_and_data_partitions(args: argparse.Namespace) -> tuple:
                                         snapshot=args.snapshot, verbose=args.verbose)
     if args.verbose:
         get_file_info(path=path_data, chunk_size=args.chunk_size)
+
+    if args.key_footer:
+        path_key = None
+        return path_key, path_data
 
     path_key = get_encrypted_raw_image(img_dir=args.avd, img_filename=args.header_file,
                                        out_dir=args.outdir, out_filename=f'{args.outname}.key',
@@ -326,8 +355,10 @@ def get_encrypted_key_and_data_partitions(args: argparse.Namespace) -> tuple:
 
 
 def extract_encrypted_key(path_key: pathlib.Path, verbose: bool) -> tuple:
+
+    header_file_str = path_key.relative_to(args.outdir) if path_key else "(data partition footer)"
     if verbose:
-        print(f'\nSTEP 2: Extract encrypted key from header file `{path_key.relative_to(args.outdir)}`\n')
+        print(f'\nSTEP 2: Extract encrypted key from header file `{header_file_str}`\n')
     encrypted_key, salt, header = parse_encryption_key_from_partition(header_file=path_key, verbose=verbose)
     return encrypted_key, salt, header
 
@@ -343,35 +374,29 @@ def decrypt_encryption_key(encrypted_key: bytes, salt: bytes, password: str, hea
 def decrypt_data_partition(path_in: pathlib.Path, decrypted_key: bytes, args: argparse.Namespace, sector_start=0):
     path_out = args.outdir.joinpath(f'{args.outname}.raw')
     if args.verbose:
-        print(f'\n\nSTEP 4: Decrypt encrypted image `{path_data.relative_to(args.outdir)}` '
-              f'to `{path_out.relative_to(args.outdir)}`\n'
+        print(f'\n\nSTEP 4: Decrypt encrypted image `{path_data}` '
+              f'to `{path_out}`\n'
               f'        using decrypted key `Ox{decrypted_key.hex().upper()}`\n')
 
     decrypt(encrypted_partition=path_in, sector_start=sector_start, decrypted_key=decrypted_key, outfile=path_out)
     get_file_info(path=path_out, chunk_size=args.chunk_size)
 
-def extract_footer():
+def extract_footer() -> bytes:
     print("Extracting footer...\n")
     CRYPTO_FOOTER_SIZE=16384
-    TEMP_FOOTER_FILE = tempfile.TemporaryFile()
-    with open(args.encrypted_partition.as_posix(), 'rb') as f:
+    with open(args.encrypted_partition, 'rb') as f:
         f.seek(-1 * CRYPTO_FOOTER_SIZE, os.SEEK_END)
-        chunk = f.read(CRYPTO_FOOTER_SIZE)
-        print(chunk.hex()[:16])
-        TEMP_FOOTER_FILE.write(chunk)
-
+        ftr = f.read(CRYPTO_FOOTER_SIZE)
+        print(ftr.hex()[:16])
+        return ftr
 
 if __name__ == '__main__':
     # parse command-line arguments
     args = parse_arguments()
 
-    if args.key_footer:
-        extract_footer()
-        exit(-1)
-
     # get partitions of encrypted key and data partitions as raw files
     path_key, path_data = get_encrypted_key_and_data_partitions(args=args)
-
+    
     # extract encrypted key from encrypted key partition (raw file)
     encrypted_key, salt, header = extract_encrypted_key(path_key=path_key, verbose=args.verbose)
 
